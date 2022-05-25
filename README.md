@@ -1,6 +1,8 @@
 # BilibiliMangaDownloader
 下载哔哩哔哩漫画到本地
 
+**只能下载免费章节和用户已订阅章节**
+
 ## 需求python版本
 
 **3.10+**
