@@ -11,6 +11,7 @@
 2. 在 `.env` 中配置你的哔哩哔哩用户 cookies
 3. 运行: `python download_bilibili_manga.py`
 4. 按提示输入需要下载的漫画
+5. 运行: `python download_bilibili_manga.py -h` 查看命令帮助
 
 ## 如何获取哔哩哔哩 cookies
 

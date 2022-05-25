@@ -144,7 +144,7 @@ async def download_manga(comic_id: int, ep_index: int | None = None) -> None:
         if ep_index is None:
             logger.info(f'未指定章节序号, 将尝试下载漫画"{manga_ep.data.title}"全部章节')
             tasks = [_download_ep(session=session, ep_id=ep_id,
-                                  folder=FileHandler('download', manga_ep.data.title, str(ep_id)))
+                                  folder=FileHandler('download', f'{comic_id}_{manga_ep.data.title}', str(ep_id)))
                      for ep_id in ep_list]
         else:
             if ep_index > len(ep_list):
@@ -152,7 +152,9 @@ async def download_manga(comic_id: int, ep_index: int | None = None) -> None:
 
             logger.info(f'下载漫画"{manga_ep.data.title}"第 {ep_index + 1} 章')
             tasks = [_download_ep(session=session, ep_id=ep_list[ep_index],
-                                  folder=FileHandler('download', manga_ep.data.title, str(ep_list[ep_index])))]
+                                  folder=FileHandler('download',
+                                                     f'{comic_id}_{manga_ep.data.title}',
+                                                     str(ep_list[ep_index])))]
         all_count = len(tasks)
         download_result = await semaphore_gather(tasks=tasks, semaphore_num=2, return_exceptions=True)
 
