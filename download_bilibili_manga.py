@@ -19,7 +19,7 @@ def _create_argument_parser() -> ArgumentParser:
     """命令解析器"""
     parser = ArgumentParser(description='bilibili漫画下载')
     parser.add_argument('-c', '--comic-id', type=str, default='', help='漫画id')
-    parser.add_argument('-e', '--ep-index', type=str, default='', help='章节序号')
+    parser.add_argument('-e', '--ep-index', type=str, default='', help='章节id')
     return parser
 
 
@@ -43,12 +43,12 @@ if __name__ == '__main__':
     comic_id = int(comic_id)
 
     if not arg.ep_index:
-        logger.opt(colors=True).info('您没有指定需要下载的漫画章节数, 将会下载该漫画全部章节')
+        logger.opt(colors=True).info('您没有指定需要下载的漫画章节 id, 将会下载该漫画全部章节')
         ep_index = None
     else:
         ep_index = arg.ep_index
         if not ep_index.isdigit():
-            logger.error(f'{ep_index} 不是可用的漫画章节数! 漫画章节数应当为纯数字!')
+            logger.error(f'{ep_index} 不是可用的漫画章节 id! 漫画章节数应当为纯数字!')
             sys.exit()
         ep_index = int(ep_index)
 

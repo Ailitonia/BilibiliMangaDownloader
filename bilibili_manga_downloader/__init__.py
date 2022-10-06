@@ -1,7 +1,8 @@
 import aiohttp
 import json
+import re
 from aiohttp import ClientSession
-
+from datetime import datetime
 
 from .config import BilibiliCookiesConfig
 from .file_handler import FileHandler, semaphore_gather
@@ -115,12 +116,20 @@ async def _download_ep(ep_id: int, *, folder: FileHandler, session: ClientSessio
     return zip_file
 
 
+def _replace_filename(filename: str) -> str:
+    """移除文件名中的特殊字符"""
+    filename = re.sub(r'[\\/:*"<>|]', '_', filename)
+    filename = re.sub(r'\?', '？', filename)
+    return filename
+
+
 async def download_manga(comic_id: int, ep_index: int | None = None) -> None:
     """下载漫画
 
     :param comic_id: 漫画 id
-    :param ep_index: 章节序号
+    :param ep_index: 章节 id
     """
+    t_suffix: str = datetime.now().strftime('%Y%m%d-%H%M%S')
     _timeout: int = 10
     async with aiohttp.ClientSession(timeout=_timeout) as session:
         if not _cookies_config.cookies:
@@ -138,23 +147,22 @@ async def download_manga(comic_id: int, ep_index: int | None = None) -> None:
 
         logger.info(f'已获取漫画"{manga_ep.data.title}"章节列表, 共 {manga_ep.data.total} 章')
 
-        ep_list = manga_ep.all_ep_list
-        ep_list.reverse()
+        if ep_index is not None and ep_index not in manga_ep.all_ep_list:
+            raise ValueError(f'指定的章节 id 不属于漫画"{manga_ep.data.title}"')
 
-        if ep_index is None:
-            logger.info(f'未指定章节序号, 将尝试下载漫画"{manga_ep.data.title}"全部章节')
-            tasks = [_download_ep(session=session, ep_id=ep_id,
-                                  folder=FileHandler('download', f'{comic_id}_{manga_ep.data.title}', str(ep_id)))
-                     for ep_id in ep_list]
-        else:
-            if ep_index > len(ep_list):
-                raise ValueError(f'指定的章节序号大于漫画"{manga_ep.data.title}"全部章节数')
+        tasks = [
+            _download_ep(
+                session=session, ep_id=ep.id,
+                folder=FileHandler(
+                    'download',
+                    f'{comic_id}_{_replace_filename(manga_ep.data.title)}_{t_suffix}',
+                    f'{ep.id}_{_replace_filename(ep.short_title)}_{_replace_filename(ep.title)}'
+                )
+            )
+            for ep in manga_ep.data.ep_list
+            if (ep_index is None) or (ep_index is not None and ep_index in manga_ep.all_ep_list and ep.id == ep_index)
+        ]
 
-            logger.info(f'下载漫画"{manga_ep.data.title}"第 {ep_index + 1} 章')
-            tasks = [_download_ep(session=session, ep_id=ep_list[ep_index],
-                                  folder=FileHandler('download',
-                                                     f'{comic_id}_{manga_ep.data.title}',
-                                                     str(ep_list[ep_index])))]
         all_count = len(tasks)
         download_result = await semaphore_gather(tasks=tasks, semaphore_num=2, return_exceptions=True)
 
@@ -162,6 +170,8 @@ async def download_manga(comic_id: int, ep_index: int | None = None) -> None:
         fail_count = len(exceptions)
 
         logger.info(f'下载漫画"{manga_ep.data.title}"完成, 成功: {all_count - fail_count}, 失败: {fail_count}')
+
+    logger.success(f'漫画"{manga_ep.data.title}"下载任务全部完成')
 
 
 __all__ = [

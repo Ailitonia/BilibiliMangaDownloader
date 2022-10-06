@@ -8,10 +8,14 @@
 @Software       : PyCharm 
 """
 
-from typing import Any
+import inspect
 from aiohttp import ClientSession, ClientTimeout
+from asyncio.exceptions import TimeoutError as _TimeoutError
+from typing import TypeVar, ParamSpec, Callable, Coroutine, Any
+from functools import wraps
 
 from .file_handler import FileHandler
+from .logger import logger
 
 
 _DEFAULT_HEADERS = {
@@ -33,6 +37,55 @@ _DEFAULT_HEADERS = {
 }
 
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+class ExceededAttemptError(Exception):
+    """重试次数超过限制异常"""
+
+
+def retry(attempt_limit: int = 3):
+    """装饰器, 自动重试, 仅用于异步函数
+
+    :param attempt_limit: 重试次数上限
+    """
+
+    def decorator(func: Callable[P, Coroutine[None, None, R]]) -> Callable[P, Coroutine[None, None, R]]:
+        if not inspect.iscoroutinefunction(func):
+            raise ValueError('The decorated function must be coroutine function')
+
+        @wraps(func)
+        async def _wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            attempts_num = 0
+            _module = inspect.getmodule(func)
+            while attempts_num < attempt_limit:
+                try:
+                    return await func(*args, **kwargs)
+                except _TimeoutError:
+                    logger.opt(colors=True).debug(
+                        f'<lc>Decorator Retry</lc> | <ly>{_module.__name__ if _module is not None else "Unknown"}.'
+                        f'{func.__name__}</ly> <r>Attempted {attempts_num + 1} times</r> <c>></c> <r>TimeoutError</r>')
+                except Exception as e:
+                    logger.opt(colors=True).warning(
+                        f'<lc>Decorator Retry</lc> | <ly>{_module.__name__ if _module is not None else "Unknown"}.'
+                        f'{func.__name__}</ly> <r>Attempted {attempts_num + 1} times</r> <c>></c> '
+                        f'<r>Exception {e.__class__.__name__}</r>: {e}')
+                finally:
+                    attempts_num += 1
+            else:
+                logger.opt(colors=True).error(
+                    f'<lc>Decorator Retry</lc> | <ly>{_module.__name__ if _module is not None else "Unknown"}.'
+                    f'{func.__name__}</ly> <r>Attempted {attempts_num} times</r> <c>></c> '
+                    f'<r>Exception ExceededAttemptError</r>: The number of failures exceeds the limit of attempts. '
+                    f'<lc>Parameters(args={args}, kwargs={kwargs})</lc>')
+                raise ExceededAttemptError('The number of failures exceeds the limit of attempts')
+        return _wrapper
+
+    return decorator
+
+
+@retry(attempt_limit=3)
 async def fetch_get_json(
         url: str,
         session: ClientSession,
@@ -54,6 +107,7 @@ async def fetch_get_json(
     return result
 
 
+@retry(attempt_limit=3)
 async def fetch_post_json(
         url: str,
         session: ClientSession,
@@ -75,6 +129,7 @@ async def fetch_post_json(
     return result
 
 
+@retry(attempt_limit=3)
 async def download_file(
         url: str,
         file: FileHandler,
